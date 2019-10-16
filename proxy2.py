@@ -157,20 +157,23 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             origin = (scheme, netloc)
             if not origin in self.tls.conns:
                 if scheme == 'https':
-                    self.tls.conns[origin] = httplib.HTTPSConnection(proxy_host, proxy_port, timeout=self.timeout)
-                    # self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
+                    # self.tls.conns[origin] = httplib.HTTPSConnection(proxy_host, proxy_port, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
                 else:
-                    self.tls.conns[origin] = httplib.HTTPConnection(proxy_host, proxy_port, timeout=self.timeout)
-                    # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
+                    # self.tls.conns[origin] = httplib.HTTPConnection(proxy_host, proxy_port, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             auth = '%s:%s' % (proxy_username, proxy_password)
             # headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
             # req.headers['Host'] = proxy_host
-            req.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
+            # req.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
             conn = self.tls.conns[origin]
+
             print("===========connection request============")
+            print(scheme)
             print(self.command,path,req_body,dict(req.headers))
             print("===========connection request end ============")
-            conn.request(self.command, req.path, req_body, dict(req.headers))
+            # conn.request(self.command, req.path, req_body, dict(req.headers))
+            conn.request(self.command, path, req_body, dict(req.headers))
             res = conn.getresponse()
 
             version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
