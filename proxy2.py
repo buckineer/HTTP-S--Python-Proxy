@@ -162,7 +162,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             print("===========connection request============")
             print(self.command,path,req_body,dict(req.headers))
             print("===========connection request end ============")
-            conn.request(self.command, path, req_body, dict(req.headers))
+            conn.request(self.command, req.path, req_body, dict(req.headers))
             res = conn.getresponse()
 
             version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
