@@ -5,6 +5,7 @@ import socket
 import ssl
 import select
 import httplib
+import base64
 import urlparse
 import threading
 import gzip
@@ -12,11 +13,18 @@ import zlib
 import time
 import json
 import re
+import traceback
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 from SocketServer import ThreadingMixIn
 from cStringIO import StringIO
 from subprocess import Popen, PIPE
 from HTMLParser import HTMLParser
+
+
+proxy_host = "ca.smartproxy.com"
+proxy_port = 20000
+proxy_username = 'rycao18'
+proxy_password = 'Unknown'
 
 
 def with_color(c, s):
@@ -180,6 +188,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
             res_body = res.read()
         except Exception as e:
+            traceback.print_exc()
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
             self.send_error(502)
