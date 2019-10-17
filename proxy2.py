@@ -119,9 +119,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         # setup basic authentication
         user_pass = base64.encodestring(proxy_username+':'+proxy_password)
         proxy_authorization = 'Proxy-authorization: Basic '+user_pass+'\r\n'
-        proxy_connect = 'CONNECT %s:%s HTTP/1.0\r\n' % (host, port)
+        proxy_connect = 'CONNECT %s:%s HTTP/1.0\r\n' % (proxy_host, proxy_port)
         proxy_headers = ''
-        for (k,v) in self.headers.items:
+        for (k,v) in self.headers.items():
             if (k != 'Proxy-Authorization'):
                 proxy_headers += '%s: %s\r\n' % (k, v)
         proxy_pieces = proxy_connect+proxy_authorization+proxy_headers+'\r\n'
@@ -144,6 +144,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             # s = socket.create_connection(address, timeout=self.timeout)
             s = self.create_socket_connection_with_http_proxy()
         except Exception as e:
+            traceback.print_exc()
             self.send_error(502)
             return
         self.send_response(200, 'Connection Established')
