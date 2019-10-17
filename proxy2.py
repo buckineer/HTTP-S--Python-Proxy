@@ -74,12 +74,14 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if self.headers.getheader('Proxy-Authorization') is None:
             self.do_AUTHHEAD()
             self.wfile.write('no auth header received')
+            self.wfile.write('\r\n\r\n')
             self.wfile.flush()
             return
         elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
             self.do_AUTHHEAD()
             self.wfile.write(self.headers.getheader('Proxy-Authorization'))
             self.wfile.write('Not Authenticated')
+            self.wfile.write('\r\n\r\n')
             self.wfile.flush()
             return
         if os.path.isfile(self.cakey) and os.path.isfile(self.cacert) and os.path.isfile(self.certkey) and os.path.isdir(self.certdir):
