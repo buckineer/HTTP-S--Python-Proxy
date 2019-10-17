@@ -52,7 +52,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     cacert = join_with_script_dir('ca.crt')
     certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
-    timeout = 30
+    timeout = 100
     lock = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -131,6 +131,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+
         if self.path == 'http://proxy2.test/':
             self.send_cacert()
             return
@@ -149,6 +150,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
             return
         req = self
+        timeout = int(req.headers.get('timeout'))
         content_length = int(req.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else None
 
@@ -191,7 +193,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             conn = self.tls.conns[origin]
             print("===========connection request============")
             print(scheme)
-            print(self.command,path,req_body,dict(req.headers))
+            print(self.command,req.path,req_body,dict(req.headers))
             print("===========connection request end ============")            
             conn.request(self.command, path, req_body, dict(req.headers))
             # conn.request(self.command, path, req_body, dict(req.headers))
