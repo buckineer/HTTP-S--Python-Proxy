@@ -150,7 +150,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
             return
         req = self
-        timeout = int(req.headers.get('timeout'))
         content_length = int(req.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else None
 
