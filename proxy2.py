@@ -69,6 +69,19 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.log_message(format, *args)
 
     def do_CONNECT(self):
+        auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
+        print("Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
+        if self.headers.getheader('Proxy-Authorization') is None:
+            self.do_AUTHHEAD()
+            self.wfile.write('no auth header received')
+            self.wfile.flush()
+            return
+        elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
+            self.do_AUTHHEAD()
+            self.wfile.write(self.headers.getheader('Proxy-Authorization'))
+            self.wfile.write('Not Authenticated')
+            self.wfile.flush()
+            return
         if os.path.isfile(self.cakey) and os.path.isfile(self.cacert) and os.path.isfile(self.certkey) and os.path.isdir(self.certdir):
             self.connect_intercept()
         else:
