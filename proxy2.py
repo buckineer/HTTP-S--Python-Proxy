@@ -84,6 +84,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write('\r\n\r\n')
             self.wfile.flush()
             return
+        self.connect_relay()
+        return
         if os.path.isfile(self.cakey) and os.path.isfile(self.cacert) and os.path.isfile(self.certkey) and os.path.isdir(self.certdir):
             self.connect_intercept()
         else:
@@ -133,6 +135,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             for r in rlist:
                 other = conns[1] if r is conns[0] else conns[0]
                 data = r.recv(8192)
+                print(data)
                 if not data:
                     self.close_connection = 1
                     break
@@ -150,20 +153,21 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if self.path == 'http://proxy2.test/':
             self.send_cacert()
             return
-        # Proxy Authentication Part
-        auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
-        print("Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
-        if self.headers.getheader('Proxy-Authorization') is None:
-            self.do_AUTHHEAD()
-            self.wfile.write('no auth header received')
-            self.wfile.flush()
-            return
-        elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
-            self.do_AUTHHEAD()
-            self.wfile.write(self.headers.getheader('Proxy-Authorization'))
-            self.wfile.write('Not Authenticated')
-            self.wfile.flush()
-            return
+        if not isinstance(self.connection, ssl.SSLSocket):
+            # Proxy Authentication Part
+            auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
+            print("Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
+            if self.headers.getheader('Proxy-Authorization') is None:
+                self.do_AUTHHEAD()
+                self.wfile.write('no auth header received')
+                self.wfile.flush()
+                return
+            elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
+                self.do_AUTHHEAD()
+                self.wfile.write(self.headers.getheader('Proxy-Authorization'))
+                self.wfile.write('Not Authenticated')
+                self.wfile.flush()
+                return
         req = self
         content_length = int(req.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else None
@@ -208,7 +212,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             print("===========connection request============")
             print(scheme)
             print(self.command,req.path,req_body,dict(req.headers))
-            print("===========connection request end ============")            
+            print("===========connection request end ============")
             conn.request(self.command, path, req_body, dict(req.headers))
             # conn.request(self.command, path, req_body, dict(req.headers))
             res = conn.getresponse()
