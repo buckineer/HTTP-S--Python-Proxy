@@ -172,7 +172,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             print(scheme)
             print(self.command,path,req_body,dict(req.headers))
             print("===========connection request end ============")
-            conn.set_tunnel(netloc);
+            conn.set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
             conn.request(self.command, path, req_body, dict(req.headers))
             # conn.request(self.command, path, req_body, dict(req.headers))
             res = conn.getresponse()
