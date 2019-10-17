@@ -123,11 +123,31 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     break
                 other.sendall(data)
 
+    def do_AUTHHEAD(self):
+        print("send header")
+        self.send_response(407)
+        self.send_header('Proxy-Authenticate', 'Basic realm=\"Test\"')
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
     def do_GET(self):
         if self.path == 'http://proxy2.test/':
             self.send_cacert()
             return
-
+        # Proxy Authentication Part
+        auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
+        print("Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
+        if self.headers.getheader('Proxy-Authorization') is None:
+            self.do_AUTHHEAD()
+            self.wfile.write('no auth header received')
+            self.wfile.flush()
+            return
+        elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
+            self.do_AUTHHEAD()
+            self.wfile.write(self.headers.getheader('Proxy-Authorization'))
+            self.wfile.write('Not Authenticated')
+            self.wfile.flush()
+            return
         req = self
         content_length = int(req.headers.get('Content-Length', 0))
         req_body = self.rfile.read(content_length) if content_length else None
