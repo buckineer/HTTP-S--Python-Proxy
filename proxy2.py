@@ -52,7 +52,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     cacert = join_with_script_dir('ca.crt')
     certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
-    timeout = 8
+    timeout = 30
     lock = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -205,8 +205,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
             conn.request(self.command, path, req_body, dict(req.headers))
-            res = conn.getresponse()
-
+            res = conn.getresponse()            
             version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
             setattr(res, 'headers', res.msg)
             setattr(res, 'response_version', version_table[res.version])
@@ -250,8 +249,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
         with self.lock:
-            self.save_handler(req, req_body, res, res_body_plain)
+            self.save_handler(req, req_body, res, res_body_plain)        
         print("===========Do Get End Response==========")
+        self.close_connection = 1
 
     def relay_streaming(self, res):
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason))
