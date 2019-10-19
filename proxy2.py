@@ -52,7 +52,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     cacert = join_with_script_dir('ca.crt')
     certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
-    timeout = 100
+    timeout = 8
     lock = threading.Lock()
 
     def __init__(self, *args, **kwargs):
@@ -68,9 +68,16 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         self.log_message(format, *args)
 
+    def do_AUTHHEAD(self):
+        print("send header")
+        self.send_response(407)
+        self.send_header('Proxy-Authenticate', 'Basic realm=\"Test\"')
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
     def do_CONNECT(self):
         auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
-        print("Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
+        print("DO CONNECT Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
         if self.headers.getheader('Proxy-Authorization') is None:
             self.do_AUTHHEAD()
             self.wfile.write('no auth header received')
@@ -84,8 +91,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write('\r\n\r\n')
             self.wfile.flush()
             return
-        self.connect_relay()
-        return
         if os.path.isfile(self.cakey) and os.path.isfile(self.cacert) and os.path.isfile(self.certkey) and os.path.isdir(self.certdir):
             self.connect_intercept()
         else:
@@ -115,36 +120,12 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         else:
             self.close_connection = 1
 
-    def create_socket_connection_with_http_proxy(self):
-        # setup basic authentication
-        user_pass = base64.encodestring(proxy_username+':'+proxy_password)
-        proxy_authorization = 'Proxy-authorization: Basic '+user_pass+'\r\n'
-        proxy_connect = 'CONNECT %s:%s HTTP/1.0\r\n' % (proxy_host, proxy_port)
-        proxy_headers = ''
-        for (k,v) in self.headers.items():
-            if (k != 'Proxy-Authorization'):
-                proxy_headers += '%s: %s\r\n' % (k, v)
-        proxy_pieces = proxy_connect+proxy_authorization+proxy_headers+'\r\n'
-
-        # now connect, very simple recv and error checking
-        proxy = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        proxy.settimeout(self.timeout)
-        proxy.connect((proxy_host, proxy_port))
-        proxy.sendall(proxy_pieces)
-        response = proxy.recv(8192)
-        status = response.split()[1]
-        if status != str(200):
-            raise Exception('Error status=', str(status))
-        return proxy
-
     def connect_relay(self):
         address = self.path.split(':', 1)
         address[1] = int(address[1]) or 443
         try:
-            # s = socket.create_connection(address, timeout=self.timeout)
-            s = self.create_socket_connection_with_http_proxy()
+            s = socket.create_connection(address, timeout=self.timeout)
         except Exception as e:
-            traceback.print_exc()
             self.send_error(502)
             return
         self.send_response(200, 'Connection Established')
@@ -159,28 +140,21 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             for r in rlist:
                 other = conns[1] if r is conns[0] else conns[0]
                 data = r.recv(8192)
-                print(data)
                 if not data:
                     self.close_connection = 1
                     break
                 other.sendall(data)
 
-    def do_AUTHHEAD(self):
-        print("send header")
-        self.send_response(407)
-        self.send_header('Proxy-Authenticate', 'Basic realm=\"Test\"')
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
     def do_GET(self):
-
+        print("========= Do Get Authorization Headers ============", self.headers.getheader('Proxy-Authorization'))
+        print(self.path)
         if self.path == 'http://proxy2.test/':
             self.send_cacert()
             return
         if not isinstance(self.connection, ssl.SSLSocket):
             # Proxy Authentication Part
             auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
-            print("Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
+            
             if self.headers.getheader('Proxy-Authorization') is None:
                 self.do_AUTHHEAD()
                 self.wfile.write('no auth header received')
@@ -215,13 +189,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         assert scheme in ('http', 'https')
         if netloc:
             req.headers['Host'] = netloc
-        setattr(req, 'headers', self.filter_headers(req.headers))
-
+        setattr(req, 'headers', self.filter_headers(req.headers))        
         try:
             origin = (scheme, netloc)
             auth = '%s:%s' % (proxy_username, proxy_password)
-            # headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
-            # req.headers['Host'] = proxy_host
             req.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
             if not origin in self.tls.conns:
                 if scheme == 'https':
@@ -233,12 +204,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
                     # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
-            print("===========connection request============")
-            print(scheme)
-            print(self.command,req.path,req_body,dict(req.headers))
-            print("===========connection request end ============")
             conn.request(self.command, path, req_body, dict(req.headers))
-            # conn.request(self.command, path, req_body, dict(req.headers))
             res = conn.getresponse()
 
             version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
@@ -256,10 +222,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
             res_body = res.read()
         except Exception as e:
-            traceback.print_exc()
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
             self.send_error(502)
+            traceback.print_exc()
             return
 
         content_encoding = res.headers.get('Content-Encoding', 'identity')
@@ -285,6 +251,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         with self.lock:
             self.save_handler(req, req_body, res, res_body_plain)
+        print("===========Do Get End Response==========")
 
     def relay_streaming(self, res):
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason))
