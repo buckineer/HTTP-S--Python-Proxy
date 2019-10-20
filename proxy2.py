@@ -231,7 +231,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
             conn.request(self.command, path, req_body, dict(req.headers))
-            res = conn.getresponse()            
+            res = conn.getresponse()
             version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
             setattr(res, 'headers', res.msg)
             setattr(res, 'response_version', version_table[res.version])
@@ -470,8 +470,7 @@ def run_server(port, lock, HandlerClass=ProxyRequestHandler, ServerClass=Threadi
         server_address = ('', port)
         HandlerClass.protocol_version = protocol
         httpd = ServerClass(server_address, HandlerClass)
-        sa = httpd.socket.getsockname()
-        httpd.port_number = sa[1]
+        sa = httpd.socket.getsockname()        
         lock.acquire()
         print "Serving HTTP Proxy on", sa[0], "port", sa[1], "...", '\n'
         lock.release()
