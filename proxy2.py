@@ -251,7 +251,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 del self.tls.conns[origin]
             self.send_error(502)
             # self.close_connection = 1
-            # traceback.print_exc()
+            traceback.print_exc()
             return
 
         content_encoding = res.headers.get('Content-Encoding', 'identity')
