@@ -35,7 +35,8 @@ route_table={
     20008: 'ca.smartproxy.com:20000:rycao18:Unknown',
     20009: 'us.smartproxy.com:10000:rycao18:Unknown',
     20010: 'ca.smartproxy.com:20000:rycao18:Unknown',
-    20011: 'us.smartproxy.com:10000:rycao18:Unknown'
+    20011: 'us.smartproxy.com:10000:rycao18:Unknown',
+    20012: "proxy.spider.com:8080:berkeley-Unknown-country-us:Rycaorec"
 }
 
 def with_color(c, s):
@@ -92,10 +93,11 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     def init_ProxyInfo(self):
         port_number = self.server.server_port
         proxy_parts = route_table[port_number].split(':')
-        self.proxy_ip = proxy_parts[0]
+        print(proxy_parts)
+        self.proxy_ip = str(proxy_parts[0])
         self.proxy_port = int(proxy_parts[1])
-        self.proxy_username = proxy_parts[2]
-        self.proxy_password = proxy_parts[3]
+        self.proxy_username = str(proxy_parts[2])
+        self.proxy_password = str(proxy_parts[3])
 
     def do_CONNECT(self):
         self.init_ProxyInfo()
@@ -220,6 +222,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             origin = (scheme, netloc)
             auth = '%s:%s' % (self.proxy_username, self.proxy_password)
             req.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
+            print(netloc)
             if not origin in self.tls.conns:
                 if scheme == 'https':
                     self.tls.conns[origin] = httplib.HTTPSConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
@@ -227,10 +230,13 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     # self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
                 else:
                     self.tls.conns[origin] = httplib.HTTPConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
-                    self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
+                    # self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
                     # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
-            conn.request(self.command, path, req_body, dict(req.headers))
+            if scheme == 'https':
+                conn.request(self.command, path, req_body, dict(req.headers))
+            else:
+                conn.request(self.command, req.path, req_body, dict(req.headers))
             res = conn.getresponse()
             version_table = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}
             setattr(res, 'headers', res.msg)
