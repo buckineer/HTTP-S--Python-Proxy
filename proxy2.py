@@ -93,10 +93,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         port_number = self.server.server_port
         proxy_parts = route_table[port_number].split(':')
         self.proxy_ip = proxy_parts[0]
-        self.proxy_port = proxy_parts[1]
+        self.proxy_port = int(proxy_parts[1])
         self.proxy_username = proxy_parts[2]
         self.proxy_password = proxy_parts[3]
-        print(self.proxy_ip,self.proxy_port, self.proxy_username)      
+
     def do_CONNECT(self):
         self.init_ProxyInfo()
         auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
@@ -470,7 +470,7 @@ def run_server(port, lock, HandlerClass=ProxyRequestHandler, ServerClass=Threadi
         server_address = ('', port)
         HandlerClass.protocol_version = protocol
         httpd = ServerClass(server_address, HandlerClass)
-        sa = httpd.socket.getsockname()        
+        sa = httpd.socket.getsockname()
         lock.acquire()
         print "Serving HTTP Proxy on", sa[0], "port", sa[1], "...", '\n'
         lock.release()
