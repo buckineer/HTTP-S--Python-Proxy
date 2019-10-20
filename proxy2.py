@@ -536,7 +536,7 @@ def RunMultiProcess():
         # p10.start()
     
 if __name__ == '__main__':
-    test()
-    # RunMultiProcess()
+    # test()
+    RunMultiProcess()
     # run_server(port = 20000)
     # run_server(port = 20001)              
