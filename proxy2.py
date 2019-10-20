@@ -19,13 +19,24 @@ from SocketServer import ThreadingMixIn
 from cStringIO import StringIO
 from subprocess import Popen, PIPE
 from HTMLParser import HTMLParser
+from multiprocessing import Process
+import multiprocessing
 
 
-proxy_host = "ca.smartproxy.com"
-proxy_port = 20000
-proxy_username = 'rycao18'
-proxy_password = 'Unknown'
-
+route_table={
+    20000: 'ca.smartproxy.com:20000:rycao18:Unknown',
+    20001: 'us.smartproxy.com:10000:rycao18:Unknown',
+    20002: 'ca.smartproxy.com:20000:rycao18:Unknown',
+    20003: 'us.smartproxy.com:10000:rycao18:Unknown',
+    20004: 'ca.smartproxy.com:20000:rycao18:Unknown',
+    20005: 'us.smartproxy.com:10000:rycao18:Unknown',
+    20006: 'ca.smartproxy.com:20000:rycao18:Unknown',
+    20007: 'us.smartproxy.com:10000:rycao18:Unknown',
+    20008: 'ca.smartproxy.com:20000:rycao18:Unknown',
+    20009: 'us.smartproxy.com:10000:rycao18:Unknown',
+    20010: 'ca.smartproxy.com:20000:rycao18:Unknown',
+    20011: 'us.smartproxy.com:10000:rycao18:Unknown'
+}
 
 def with_color(c, s):
     return "\x1b[%dm%s\x1b[0m" % (c, s)
@@ -36,8 +47,7 @@ def join_with_script_dir(path):
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     address_family = socket.AF_INET
-    daemon_threads = True
-
+    daemon_threads = True    
     def handle_error(self, request, client_address):
         # surpress socket/ssl related errors
         cls, e = sys.exc_info()[:2]
@@ -54,12 +64,16 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     certdir = join_with_script_dir('certs/')
     timeout = 30
     lock = threading.Lock()
-
+    proxy_ip,proxy_port,proxy_username,proxy_password=('','','','')
     def __init__(self, *args, **kwargs):
+        
         self.tls = threading.local()
         self.tls.conns = {}
-
         BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
+        # self.proxy_host = "ca.smartproxy.com"
+        # self.proxy_port = 20000
+        # self.proxy_username = 'rycao18'
+        # self.proxy_password = 'Unknown'
 
     def log_error(self, format, *args):
         # surpress "Request timed out: timeout('timed out',)"
@@ -75,9 +89,19 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
 
+    def init_ProxyInfo(self):
+        port_number = self.server.server_port
+        proxy_parts = route_table[port_number].split(':')
+        self.proxy_ip = proxy_parts[0]
+        self.proxy_port = proxy_parts[1]
+        self.proxy_username = proxy_parts[2]
+        self.proxy_password = proxy_parts[3]
+        print(self.proxy_ip,self.proxy_port, self.proxy_username)      
     def do_CONNECT(self):
+        self.init_ProxyInfo()
         auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
         print("DO CONNECT Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
+
         if self.headers.getheader('Proxy-Authorization') is None:
             self.do_AUTHHEAD()
             self.wfile.write('no auth header received')
@@ -146,6 +170,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 other.sendall(data)
 
     def do_GET(self):
+        self.init_ProxyInfo()
         print("========= Do Get Authorization Headers ============", self.headers.getheader('Proxy-Authorization'))
         print(self.path)
         if self.path == 'http://proxy2.test/':
@@ -190,17 +215,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if netloc:
             req.headers['Host'] = netloc
         setattr(req, 'headers', self.filter_headers(req.headers))        
+        print(self.proxy_ip,self.proxy_port,self.proxy_username,self.proxy_password)
         try:
             origin = (scheme, netloc)
-            auth = '%s:%s' % (proxy_username, proxy_password)
+            auth = '%s:%s' % (self.proxy_username, self.proxy_password)
             req.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
             if not origin in self.tls.conns:
                 if scheme == 'https':
-                    self.tls.conns[origin] = httplib.HTTPSConnection(proxy_host, proxy_port, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPSConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
                     self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
                     # self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
                 else:
-                    self.tls.conns[origin] = httplib.HTTPConnection(proxy_host, proxy_port, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
                     self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
                     # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
@@ -224,7 +250,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if origin in self.tls.conns:
                 del self.tls.conns[origin]
             self.send_error(502)
-            traceback.print_exc()
+            # self.close_connection = 1
+            # traceback.print_exc()
             return
 
         content_encoding = res.headers.get('Content-Encoding', 'identity')
@@ -233,6 +260,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         res_body_modified = self.response_handler(req, req_body, res, res_body_plain)
         if res_body_modified is False:
             self.send_error(403)
+            # self.close_connection = 1
             return
         elif res_body_modified is not None:
             res_body_plain = res_body_modified
@@ -436,5 +464,79 @@ def test(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, prot
     httpd.serve_forever()
 
 
+
+def run_server(port, lock, HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, protocol="HTTP/1.1"):
+    try:
+        server_address = ('', port)
+        HandlerClass.protocol_version = protocol
+        httpd = ServerClass(server_address, HandlerClass)
+        sa = httpd.socket.getsockname()
+        httpd.port_number = sa[1]
+        lock.acquire()
+        print "Serving HTTP Proxy on", sa[0], "port", sa[1], "...", '\n'
+        lock.release()
+        httpd.serve_forever()
+        pass
+    except Exception as e:
+        lock.acquire()
+        print(e)
+        lock.release()
+        traceback.print_exc()
+
+
+def RunMultiProcess():
+    global route_table
+    init_json = None
+
+    try:
+        with open('init.json', 'r') as f: init_json = json.load(f)
+    except Exception as e:
+        print("Loading Init Data Failed")
+        print(e)
+    else:
+        init_json['RouteTable']
+        print(route_table)
+        l = multiprocessing.Lock()
+        for port in init_json['RouteTable']: 
+            route_table[int(port)] = init_json['RouteTable'][port]
+            p = Process(target=run_server, args=(int(port), l))
+            p.start()
+
+        # p = Process(target=run_server, args=(20000, l))
+        # p.start()
+
+        # p1 = Process(target=run_server, args=(20001, l))
+        # p1.start()
+
+        # p2 = Process(target=run_server, args=(20002, l))
+        # p2.start()
+
+        # p3 = Process(target=run_server, args=(20003, l))
+        # p3.start()
+
+        # p4 = Process(target=run_server, args=(20004, l))
+        # p4.start()
+
+        # p5 = Process(target=run_server, args=(20005, l))
+        # p5.start()
+
+        # p6 = Process(target=run_server, args=(20006, l))
+        # p6.start()
+
+        # p7 = Process(target=run_server, args=(20007, l))
+        # p7.start()
+
+        # p8 = Process(target=run_server, args=(20008, l))
+        # p8.start()
+
+        # p9 = Process(target=run_server, args=(20009, l))
+        # p9.start()
+
+        # p10 = Process(target=run_server, args=(20010, l))
+        # p10.start()
+    
 if __name__ == '__main__':
-    test()
+    # test()
+    RunMultiProcess()
+    # run_server(port = 20000)
+    # run_server(port = 20001)              
