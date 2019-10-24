@@ -21,7 +21,8 @@ from subprocess import Popen, PIPE
 from HTMLParser import HTMLParser
 from multiprocessing import Process
 import multiprocessing
-
+import database
+from database import User
 
 route_table={
     20000: 'ca.smartproxy.com:20000:rycao18:Unknown',
@@ -37,6 +38,11 @@ route_table={
     20010: 'ca.smartproxy.com:20000:rycao18:Unknown',
     20011: 'us.smartproxy.com:10000:rycao18:Unknown',
     20012: "proxy.spider.com:8080:berkeley-Unknown-country-us:Rycaorec"
+}
+
+mysession = {
+    'table':route_table,
+    'test':'test'
 }
 
 def with_color(c, s):
@@ -65,9 +71,11 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     certdir = join_with_script_dir('certs/')
     timeout = 30
     lock = threading.Lock()
-    proxy_ip,proxy_port,proxy_username,proxy_password=('','','','')
+    process_lock = None
+    ScopedSession = None
+    proxy_ip, proxy_port, proxy_username, proxy_password = ('', '', '', '')
+
     def __init__(self, *args, **kwargs):
-        
         self.tls = threading.local()
         self.tls.conns = {}
         BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
@@ -90,6 +98,21 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'text/html')
         self.end_headers()
 
+    def do_Authentication(self, auth_header, session):
+        print(auth_header)
+        auth_values = auth_header.split(' ')
+        if auth_values[0] != 'Basic':
+            return False
+        auth_key = auth_values[1]
+        username, pwd = base64.decodestring(auth_key).split(':')        
+        user = session.query(User).filter(User.username == username, User.password == pwd).first()
+        print(user)
+        self.user = user
+        if user is None:
+            return False
+
+        return True
+
     def init_ProxyInfo(self):
         port_number = self.server.server_port
         proxy_parts = route_table[port_number].split(':')
@@ -103,20 +126,22 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.init_ProxyInfo()
         auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
         print("DO CONNECT Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
-
+        session = self.ScopedSession()
         if self.headers.getheader('Proxy-Authorization') is None:
             self.do_AUTHHEAD()
             self.wfile.write('no auth header received')
             self.wfile.write('\r\n\r\n')
             self.wfile.flush()
             return
-        elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
+        elif not self.do_Authentication(self.headers.getheader('Proxy-Authorization', session)):
             self.do_AUTHHEAD()
             self.wfile.write(self.headers.getheader('Proxy-Authorization'))
             self.wfile.write('Not Authenticated')
             self.wfile.write('\r\n\r\n')
             self.wfile.flush()
+            self.ScopedSession.remove()
             return
+        self.ScopedSession.remove()
         if os.path.isfile(self.cakey) and os.path.isfile(self.cacert) and os.path.isfile(self.certkey) and os.path.isdir(self.certdir):
             self.connect_intercept()
         else:
@@ -170,7 +195,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                     self.close_connection = 1
                     break
                 other.sendall(data)
-
+    def end_handle_request(self):
+        self.close_connection = 1
+        self.ScopedSession.remove()
     def do_GET(self):
         self.init_ProxyInfo()
         print("========= Do Get Authorization Headers ============", self.headers.getheader('Proxy-Authorization'))
@@ -178,6 +205,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if self.path == 'http://proxy2.test/':
             self.send_cacert()
             return
+        print(self.ScopedSession)
+        session = self.ScopedSession()
+
         if not isinstance(self.connection, ssl.SSLSocket):
             # Proxy Authentication Part
             auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
@@ -186,12 +216,14 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 self.do_AUTHHEAD()
                 self.wfile.write('no auth header received')
                 self.wfile.flush()
+                self.end_handle_request()
                 return
-            elif self.headers.getheader('Proxy-Authorization') != 'Basic '+auth_key:
+            elif not self.do_Authentication(self.headers.getheader('Proxy-Authorization'), session):
                 self.do_AUTHHEAD()
                 self.wfile.write(self.headers.getheader('Proxy-Authorization'))
                 self.wfile.write('Not Authenticated')
                 self.wfile.flush()
+                self.end_handle_request()
                 return
         req = self
         content_length = int(req.headers.get('Content-Length', 0))
@@ -206,6 +238,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         req_body_modified = self.request_handler(req, req_body)
         if req_body_modified is False:
             self.send_error(403)
+            self.end_handle_request()
             return
         elif req_body_modified is not None:
             req_body = req_body_modified
@@ -249,6 +282,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 self.relay_streaming(res)
                 with self.lock:
                     self.save_handler(req, req_body, res, '')
+                self.end_handle_request()
                 return
 
             res_body = res.read()
@@ -258,6 +292,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.send_error(502)
             # self.close_connection = 1
             traceback.print_exc()
+            self.end_handle_request()
             return
 
         content_encoding = res.headers.get('Content-Encoding', 'identity')
@@ -267,6 +302,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if res_body_modified is False:
             self.send_error(403)
             # self.close_connection = 1
+            self.end_handle_request()
             return
         elif res_body_modified is not None:
             res_body_plain = res_body_modified
@@ -470,27 +506,34 @@ def test(HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, prot
     httpd.serve_forever()
 
 
-
-def run_server(port, lock, HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, protocol="HTTP/1.1"):
+def run_server(port, lock, database_url, HandlerClass=ProxyRequestHandler, ServerClass=ThreadingHTTPServer, protocol="HTTP/1.1", ):
+    scoped_session = None
     try:
         server_address = ('', port)
         HandlerClass.protocol_version = protocol
+        status, ret_scoped_session = database.init(database_url)
+        if not status :
+            return
+        scoped_session = ret_scoped_session
+        HandlerClass.ScopedSession = ret_scoped_session
+        HandlerClass.process_lock = lock
         httpd = ServerClass(server_address, HandlerClass)
         sa = httpd.socket.getsockname()
         lock.acquire()
         print "Serving HTTP Proxy on", sa[0], "port", sa[1], "...", '\n'
         lock.release()
         httpd.serve_forever()
-        pass
+        database.session.close()
     except Exception as e:
         lock.acquire()
         print(e)
         lock.release()
         traceback.print_exc()
+    
 
 
 def RunMultiProcess():
-    global route_table
+    global route_table, mysession
     init_json = None
 
     try:
@@ -499,13 +542,20 @@ def RunMultiProcess():
         print("Loading Init Data Failed")
         print(e)
     else:
-        init_json['RouteTable']
-        print(route_table)
+        database_url = init_json['DataBaseUrl']
+        status, ret_scoped_session = database.init(database_url)
+        if not status:
+            return
+        ret_scoped_session.remove()
         l = multiprocessing.Lock()
+        process = []
         for port in init_json['RouteTable']: 
             route_table[int(port)] = init_json['RouteTable'][port]
-            p = Process(target=run_server, args=(int(port), l))
+            p = Process(target=run_server, args=(int(port), l, database_url))
+            process.append(p)
             p.start()
+        for p in process:
+            p.join()
 
         # p = Process(target=run_server, args=(20000, l))
         # p.start()
