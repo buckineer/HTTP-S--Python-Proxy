@@ -133,7 +133,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write('\r\n\r\n')
             self.wfile.flush()
             return
-        elif not self.do_Authentication(self.headers.getheader('Proxy-Authorization', session)):
+        elif not self.do_Authentication(self.headers.getheader('Proxy-Authorization'), session):
             self.do_AUTHHEAD()
             self.wfile.write(self.headers.getheader('Proxy-Authorization'))
             self.wfile.write('Not Authenticated')
