@@ -324,6 +324,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
         with self.lock:
+            print("=============user===========")
+            print(self.user)
             if self.user:
                 self.user.data_usage = self.user.data_usage + len(res_body)
             session.commit()
