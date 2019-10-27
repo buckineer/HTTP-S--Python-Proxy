@@ -125,10 +125,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
     def do_CONNECT(self):
         self.init_ProxyInfo()
-        auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
         print("DO CONNECT Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
         session = self.ScopedSession()
-        print(session)
         if self.headers.getheader('Proxy-Authorization') is None:
             self.do_AUTHHEAD()
             self.wfile.write('no auth header received')
@@ -214,8 +212,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         if not isinstance(self.connection, ssl.SSLSocket):
             # Proxy Authentication Part
-            auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
-            
             if self.headers.getheader('Proxy-Authorization') is None:
                 self.do_AUTHHEAD()
                 self.wfile.write('no auth header received')
@@ -255,22 +251,20 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         assert scheme in ('http', 'https')
         if netloc:
             req.headers['Host'] = netloc
-        setattr(req, 'headers', self.filter_headers(req.headers))        
-        print(self.proxy_ip,self.proxy_port,self.proxy_username,self.proxy_password)
+        setattr(req, 'headers', self.filter_headers(req.headers))
         try:
             origin = (scheme, netloc)
             auth = '%s:%s' % (self.proxy_username, self.proxy_password)
             req.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
-            print(netloc)
             if not origin in self.tls.conns:
                 if scheme == 'https':
-                    # self.tls.conns[origin] = httplib.HTTPSConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
-                    # self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
-                    self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPSConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
+                    self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
+                    # self.tls.conns[origin] = httplib.HTTPSConnection(netloc, timeout=self.timeout)
                 else:
-                    # self.tls.conns[origin] = httplib.HTTPConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
+                    self.tls.conns[origin] = httplib.HTTPConnection(self.proxy_ip, self.proxy_port, timeout=self.timeout)
                     # self.tls.conns[origin].set_tunnel(netloc,headers={'Proxy-Authorization':req.headers['Proxy-Authorization']});
-                    self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
+                    # self.tls.conns[origin] = httplib.HTTPConnection(netloc, timeout=self.timeout)
             conn = self.tls.conns[origin]
             if scheme == 'https':
                 conn.request(self.command, path, req_body, dict(req.headers))
@@ -325,14 +319,14 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
         with self.lock:
-            print("=============user===========")
-            print(self.user)
-            print(len(res_body))
+            # print("=============user===========")
+            # print(self.user)
+            # print(len(res_body))
             if self.user:
-                print("===== add the data usage data")
-                print(self.user.data_usage)
+                # print("===== add the data usage data")
+                # print(self.user.data_usage)
                 self.user.data_usage = self.user.data_usage + len(res_body)
-                print(self.user.data_usage)
+                # print(self.user.data_usage)
                 session.commit()
             self.save_handler(req, req_body, res, res_body_plain)
         print("===========Do Get End Response==========")
