@@ -326,9 +326,11 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         with self.lock:
             print("=============user===========")
             print(self.user)
+            print(len(res_body))
             if self.user:
+                print("===== add the data usage data")
                 self.user.data_usage = self.user.data_usage + len(res_body)
-            session.commit()
+                session.commit()
             self.save_handler(req, req_body, res, res_body_plain)
         print("===========Do Get End Response==========")
         self.end_handle_request()
