@@ -128,6 +128,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         auth_key = 'dGVzdDp0ZXN0cGFzc3dvcmQ='
         print("DO CONNECT Proxy Authorization Headers ", self.headers.getheader('Proxy-Authorization'))
         session = self.ScopedSession()
+        print(session)
         if self.headers.getheader('Proxy-Authorization') is None:
             self.do_AUTHHEAD()
             self.wfile.write('no auth header received')
@@ -142,7 +143,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
             self.ScopedSession.remove()
             return
-        self.ScopedSession.remove()
+        # self.ScopedSession.remove()
         if os.path.isfile(self.cakey) and os.path.isfile(self.cacert) and os.path.isfile(self.certkey) and os.path.isdir(self.certdir):
             self.connect_intercept()
         else:
@@ -329,7 +330,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             print(len(res_body))
             if self.user:
                 print("===== add the data usage data")
+                print(self.user.data_usage)
                 self.user.data_usage = self.user.data_usage + len(res_body)
+                print(self.user.data_usage)
                 session.commit()
             self.save_handler(req, req_body, res, res_body_plain)
         print("===========Do Get End Response==========")
