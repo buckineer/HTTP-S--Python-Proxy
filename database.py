@@ -2,7 +2,7 @@ import sqlalchemy as db
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import scoped_session
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Float
 
 Base = declarative_base()
 
@@ -13,6 +13,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(250), nullable=False)
     password = Column(String(250))
+    data_usage = Column(Float())    # byte number
 
 
 def init(database_url):
