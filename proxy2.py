@@ -65,13 +65,13 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
-    cakey = join_with_script_dir('ca.key')
-    cacert = join_with_script_dir('ca.crt')
-    # cakey = join_with_script_dir('privkey.pem')
-    # cacert = join_with_script_dir('fullchain.pem')
+    # cakey = join_with_script_dir('ca.key')
+    # cacert = join_with_script_dir('ca.crt')
+    cakey = join_with_script_dir('privkey.pem')
+    cacert = join_with_script_dir('fullchain.pem')
     
-    # certkey = join_with_script_dir('privkey.pem')
-    certkey = join_with_script_dir('cert.key')
+    certkey = join_with_script_dir('privkey.pem')
+    # certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
     timeout = 30
     lock = threading.Lock()
