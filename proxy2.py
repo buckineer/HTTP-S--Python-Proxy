@@ -178,6 +178,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.close_connection = 1
 
     def connect_relay(self):
+        session = self.ScopedSession()
         address = self.path.split(':', 1)
         address[1] = int(address[1]) or 443
         auth = '%s:%s' % (self.proxy_username, self.proxy_password)
