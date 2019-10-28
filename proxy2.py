@@ -65,13 +65,12 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
-    # cakey = join_with_script_dir('ca.key')
-    # cacert = join_with_script_dir('ca.crt')
-    cakey = join_with_script_dir('privkey.pem')
-    cacert = join_with_script_dir('fullchain.pem')
+    cakey = join_with_script_dir('ca.key')
+    cacert = join_with_script_dir('ca.crt')
+    # cakey = join_with_script_dir('privkey.pem')
+    # cacert = join_with_script_dir('fullchain.pem')
     
-    certkey = join_with_script_dir('privkey.pem')
-    # certkey = join_with_script_dir('cert.key')
+    certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
     timeout = 30
     lock = threading.Lock()
@@ -155,18 +154,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         hostname = self.path.split(':')[0]
         certpath = "%s/%s.crt" % (self.certdir.rstrip('/'), hostname)
 
-        with self.lock:
-            if not os.path.isfile(certpath):
-                epoch = "%d" % (time.time() * 1000)
-                p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
-                p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
-                p2.communicate()
+        # with self.lock:
+        #     if not os.path.isfile(certpath):
+        #         epoch = "%d" % (time.time() * 1000)
+        #         p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
+        #         p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
+        #         p2.communicate()
 
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, 200, 'Connection Established'))
         self.end_headers()
 
-        self.connection = ssl.wrap_socket(self.connection, keyfile=self.certkey, certfile=certpath, server_side=True)
-        # self.connection = ssl.wrap_socket(self.connection, keyfile=self.cakey, certfile=self.cacert, server_side=True)
+        # self.connection = ssl.wrap_socket(self.connection, keyfile=self.certkey, certfile=certpath, server_side=True)
+        self.connection = ssl.wrap_socket(self.connection, keyfile=self.cakey, certfile=self.cacert, server_side=True)
         self.rfile = self.connection.makefile("rb", self.rbufsize)
         self.wfile = self.connection.makefile("wb", self.wbufsize)
 
@@ -181,16 +180,25 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     def connect_relay(self):
         address = self.path.split(':', 1)
         address[1] = int(address[1]) or 443
+        auth = '%s:%s' % (self.proxy_username, self.proxy_password)
+        self.headers['Proxy-Authorization'] = 'Basic ' + base64.b64encode(auth)
+        raw_data =self.raw_requestline + str(self.headers) +"\r\n"
+        print(raw_data)
         try:
+            address = (self.proxy_ip,self.proxy_port)
             s = socket.create_connection(address, timeout=self.timeout)
+            s.sendall(raw_data)
+            result = s.recv(8192)
+            self.connection.sendall(result)
         except Exception as e:
-            self.send_error(502)
+            self.send_error(502)            
             return
-        self.send_response(200, 'Connection Established')
-        self.end_headers()
+        # self.send_response(200, 'Connection Established')
+        # self.end_headers()
 
         conns = [self.connection, s]
         self.close_connection = 0
+        used_data = 0
         while not self.close_connection:
             rlist, wlist, xlist = select.select(conns, [], conns, self.timeout)
             if xlist or not rlist:
@@ -198,10 +206,17 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             for r in rlist:
                 other = conns[1] if r is conns[0] else conns[0]
                 data = r.recv(8192)
+                used_data += len(data)
                 if not data:
                     self.close_connection = 1
                     break
                 other.sendall(data)
+        with self.lock:
+            if self.user:
+                self.user.data_usage = self.user.data_usage + streamed_bytes
+                session.commit()
+        self.ScopedSession.remove()
+
     def end_handle_request(self):
         self.close_connection = 1
         self.ScopedSession.remove()
@@ -550,6 +565,7 @@ def run_server(port, lock, database_url, HandlerClass=ProxyRequestHandler, Serve
         print(e)
         lock.release()
         traceback.print_exc()
+    
 
 
 def RunMultiProcess():
@@ -609,7 +625,7 @@ def RunMultiProcess():
 
         # p10 = Process(target=run_server, args=(20010, l))
         # p10.start()
-
+    
 if __name__ == '__main__':
     # test()
     RunMultiProcess()
