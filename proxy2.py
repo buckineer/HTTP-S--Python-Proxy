@@ -65,8 +65,11 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):
-    cakey = join_with_script_dir('ca.key')
-    cacert = join_with_script_dir('ca.crt')
+    # cakey = join_with_script_dir('ca.key')
+    # cacert = join_with_script_dir('ca.crt')
+    cakey = join_with_script_dir('privkey.pem')
+    cacert = join_with_script_dir('fullchain.pem')
+    
     certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
     timeout = 30
@@ -151,17 +154,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         hostname = self.path.split(':')[0]
         certpath = "%s/%s.crt" % (self.certdir.rstrip('/'), hostname)
 
-        with self.lock:
-            if not os.path.isfile(certpath):
-                epoch = "%d" % (time.time() * 1000)
-                p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
-                p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
-                p2.communicate()
+        # with self.lock:
+        #     if not os.path.isfile(certpath):
+        #         epoch = "%d" % (time.time() * 1000)
+        #         p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
+        #         p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
+        #         p2.communicate()
 
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, 200, 'Connection Established'))
         self.end_headers()
 
-        self.connection = ssl.wrap_socket(self.connection, keyfile=self.certkey, certfile=certpath, server_side=True)
+        # self.connection = ssl.wrap_socket(self.connection, keyfile=self.certkey, certfile=certpath, server_side=True)
+        self.connection = ssl.wrap_socket(self.connection, keyfile=self.cakey, certfile=self.cacert, server_side=True)
         self.rfile = self.connection.makefile("rb", self.rbufsize)
         self.wfile = self.connection.makefile("wb", self.wbufsize)
 
@@ -279,8 +283,11 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             if not 'Content-Length' in res.headers and 'no-store' in res.headers.get('Cache-Control', ''):
                 self.response_handler(req, req_body, res, '')
                 setattr(res, 'headers', self.filter_headers(res.headers))
-                self.relay_streaming(res)
+                streamed_bytes = self.relay_streaming(res)
                 with self.lock:
+                    if self.user:
+                        self.user.data_usage = self.user.data_usage + streamed_bytes
+                        session.commit()
                     self.save_handler(req, req_body, res, '')
                 self.end_handle_request()
                 return
@@ -333,20 +340,24 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.end_handle_request()
 
     def relay_streaming(self, res):
+        streamed_bytes = 0
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, res.status, res.reason))
         for line in res.headers.headers:
             self.wfile.write(line)
         self.end_headers()
+
         try:
             while True:
                 chunk = res.read(8192)
                 if not chunk:
-                    break
-                self.wfile.write(chunk)
+                    break                
+                streamed_bytes = streamed_bytes + len(chunk)
+                self.wfile.write(chunk)                
             self.wfile.flush()
         except socket.error:
             # connection closed by client
             pass
+        return streamed_bytes
 
     do_HEAD = do_GET
     do_POST = do_GET
