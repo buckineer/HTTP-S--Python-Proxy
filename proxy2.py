@@ -154,18 +154,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         hostname = self.path.split(':')[0]
         certpath = "%s/%s.crt" % (self.certdir.rstrip('/'), hostname)
 
-        # with self.lock:
-        #     if not os.path.isfile(certpath):
-        #         epoch = "%d" % (time.time() * 1000)
-        #         p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
-        #         p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
-        #         p2.communicate()
+        with self.lock:
+            if not os.path.isfile(certpath):
+                epoch = "%d" % (time.time() * 1000)
+                p1 = Popen(["openssl", "req", "-new", "-key", self.certkey, "-subj", "/CN=%s" % hostname], stdout=PIPE)
+                p2 = Popen(["openssl", "x509", "-req", "-days", "3650", "-CA", self.cacert, "-CAkey", self.cakey, "-set_serial", epoch, "-out", certpath], stdin=p1.stdout, stderr=PIPE)
+                p2.communicate()
 
         self.wfile.write("%s %d %s\r\n" % (self.protocol_version, 200, 'Connection Established'))
         self.end_headers()
 
-        # self.connection = ssl.wrap_socket(self.connection, keyfile=self.certkey, certfile=certpath, server_side=True)
-        self.connection = ssl.wrap_socket(self.connection, keyfile=self.cakey, certfile=self.cacert, server_side=True)
+        self.connection = ssl.wrap_socket(self.connection, keyfile=self.certkey, certfile=certpath, server_side=True)
+        # self.connection = ssl.wrap_socket(self.connection, keyfile=self.cakey, certfile=self.cacert, server_side=True)
         self.rfile = self.connection.makefile("rb", self.rbufsize)
         self.wfile = self.connection.makefile("wb", self.wbufsize)
 
@@ -549,7 +549,6 @@ def run_server(port, lock, database_url, HandlerClass=ProxyRequestHandler, Serve
         print(e)
         lock.release()
         traceback.print_exc()
-    
 
 
 def RunMultiProcess():
@@ -609,7 +608,7 @@ def RunMultiProcess():
 
         # p10 = Process(target=run_server, args=(20010, l))
         # p10.start()
-    
+
 if __name__ == '__main__':
     # test()
     RunMultiProcess()
