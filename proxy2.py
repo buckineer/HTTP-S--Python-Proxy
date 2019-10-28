@@ -198,7 +198,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         conns = [self.connection, s]
         self.close_connection = 0
-        used_data = 0
+        streamed_bytes = 0
         while not self.close_connection:
             rlist, wlist, xlist = select.select(conns, [], conns, self.timeout)
             if xlist or not rlist:
@@ -206,7 +206,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             for r in rlist:
                 other = conns[1] if r is conns[0] else conns[0]
                 data = r.recv(8192)
-                used_data += len(data)
+                streamed_bytes += len(data)
                 if not data:
                     self.close_connection = 1
                     break
