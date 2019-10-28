@@ -70,7 +70,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     cakey = join_with_script_dir('privkey.pem')
     cacert = join_with_script_dir('fullchain.pem')
     
-    certkey = join_with_script_dir('cert.key')
+    certkey = join_with_script_dir('privkey.pem')
+    # certkey = join_with_script_dir('cert.key')
     certdir = join_with_script_dir('certs/')
     timeout = 30
     lock = threading.Lock()
